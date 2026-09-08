@@ -59,7 +59,7 @@ export class ServiceMonitor {
     const ai = { configured: Boolean(provider), model: typeof raw.model === 'string' ? raw.model.slice(0, 80) : null };
     for (const key of ['callsLastHour', 'maxCallsPerHour', 'successes', 'failures', 'cancellations', 'inFlight', 'averageLatencyMs', 'lastSuccessAt', 'lastFailureAt']) ai[key] = safeNumber(raw[key]);
     const sockets = [...connections];
-    return { version: '0.1.2', adminVersion: '0.1.0', startedAt: this.startedAt, now: time,
+    return { version: '0.1.3', adminVersion: '0.1.0', startedAt: this.startedAt, now: time,
       uptimeMs: Math.max(0, time - this.startedAt),
       summary: { rooms: rows.length, waitingRooms: rows.filter(r => r.phase === 'lobby').length,
         activeRooms: rows.filter(r => !['lobby', 'result'].includes(r.phase)).length,

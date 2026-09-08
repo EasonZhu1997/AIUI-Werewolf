@@ -9,7 +9,7 @@
 将以下文件放入服务器的 `/opt/aiui-werewolf/`，保持目录结构：
 
 - `server/`、`web/`、`admin/`
-- `lib/client.js`
+- `lib/client.js`、`lib/speech-text.js`
 - `package.json`、`package-lock.json`
 
 在该目录安装运行依赖：

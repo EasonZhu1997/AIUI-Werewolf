@@ -62,7 +62,7 @@ export class LobbyChatController {
   drain() {
     if (!this.active || this.hidden || this.playing || this.voice?.active || !this.queue.length) return;
     const message = this.queue.shift(); this.playing = true;
-    this.playback.play({ id: `${this.session}:${message.id}`, name: message.name || '小月', text: message.text, seat: 1 });
+    this.playback.play({ id: `${this.session}:${message.id}`, name: message.name || '小月', text: message.text, narration: true });
   }
   startVoice() {
     if (!this.active) return false;

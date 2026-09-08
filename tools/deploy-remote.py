@@ -29,7 +29,7 @@ RUNTIME_FILES = frozenset({
     "server/admin.mjs", "server/monitor.mjs",
     "admin/index.html", "admin/main.js", "admin/view.js", "admin/style.css",
     "web/index.html", "web/main.js", "web/speech.js", "web/style.css", "web/phase-ui.js", "web/lobby.js",
-    "lib/client.js", "package.json", "package-lock.json",
+    "lib/client.js", "lib/speech-text.js", "package.json", "package-lock.json",
 })
 MAX_ARCHIVE = 20 * 1024 * 1024
 MAX_EXPANDED = 10 * 1024 * 1024

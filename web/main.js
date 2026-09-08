@@ -103,7 +103,7 @@ const soundTestButton = $('soundTestButton');
 const soundTestStatus = $('soundTestStatus');
 let soundTestSequence = 0;
 const soundTest = new SpeechPlayback({
-  onDone: () => { soundTestButton.disabled = false; soundTestButton.textContent = '再次试听中文声音'; },
+  onDone: () => { soundTestButton.disabled = false; soundTestButton.textContent = '再次试听普通话'; },
   onStatus: (message) => { soundTestStatus.textContent = message; dom.voiceStatus.textContent = `声音试听：${message}`; },
 });
 soundTestButton.addEventListener('click', () => {
@@ -111,7 +111,7 @@ soundTestButton.addEventListener('click', () => {
   soundTestButton.disabled = true;
   soundTestButton.textContent = '正在试听…';
   soundTestStatus.textContent = '正在请求播放，请留意设备声音。';
-  soundTest.play({ id: `local-voice-test-${++soundTestSequence}`, name: '声音测试', seat: 1, text: '欢迎来到月下同桌。你准备好和大家一起找出狼人了吗？' });
+  soundTest.play({ id: `local-voice-test-${++soundTestSequence}`, name: '普通话试听', narration: true, text: '二号发言。我想先听三号的解释，再决定把票投给谁。请大家慢慢说，我会认真听。' });
 });
 
 if (store.read('name')) dom.nameInput.value = String(store.read('name')).slice(0, 16);

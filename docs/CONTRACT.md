@@ -1,6 +1,6 @@
 # AIUI Werewolf · Implementation contract
 
-Independent AIUI + web six-seat Werewolf game, version 0.1.2. 1–6 humans; server fills vacant seats with DeepSeek AI. Two wolves, seer, witch, two villagers. Four-digit room number and `lobby`. Public lobby is a game table with six seats. No room password. Real AI decisions, public spoken dialogue, private role/action views. No hidden-role data in public network messages or other agents' prompts. A player's statement is untrusted game dialogue.
+Independent AIUI + web six-seat Werewolf game, version 0.1.3. 1–6 humans; server fills vacant seats with DeepSeek AI. Two wolves, seer, witch, two villagers. Four-digit room number and `lobby`. Public lobby is a game table with six seats. No room password. Real AI decisions, public spoken dialogue, private role/action views. No hidden-role data in public network messages or other agents' prompts. A player's statement is untrusted game dialogue.
 
 ## Shared WebSocket protocol (JSON, `/werewolf/ws`)
 
@@ -42,6 +42,6 @@ Night sequence: wolves privately pick a non-wolf target (living wolves ballots, 
 
 ## Client configuration
 
-`lib/config.js` default export `{version:'0.1.2',url:''}` (generated, ignored). Web can derive same-origin `/werewolf/ws`; AIUI must receive configured WSS or explicit local ADB endpoint. Never embed DeepSeek key. `lib/client.js` exports `GameClient` constructor `{url,socketFactory,onState,onStatus,onWelcome,onRooms}`, methods `create({name})`, `browse()`, `refreshRooms()`, `chat(text)`, `join({roomId,name,resumeToken,createIfMissing?})`, `sendAction(action)`, `start()`, `restart()`, `speechDone(id)`, `leave()`, `disconnect()`. `socketFactory(url)` interface returns object with `onOpen(fn),onMessage(fn),onClose(fn),onError(fn),send(data),close()` matching AIUI wx SocketTask (send accepts a raw string, never a WeChat-style options object); the browser supplies its own adapter. onStatus receives string. Client current `state`, `welcome` readable. Each action automatically sends current state.revision.
+`lib/config.js` default export `{version:'0.1.3',url:''}` (generated, ignored). Web can derive same-origin `/werewolf/ws`; AIUI must receive configured WSS or explicit local ADB endpoint. Never embed DeepSeek key. `lib/client.js` exports `GameClient` constructor `{url,socketFactory,onState,onStatus,onWelcome,onRooms}`, methods `create({name})`, `browse()`, `refreshRooms()`, `chat(text)`, `join({roomId,name,resumeToken,createIfMissing?})`, `sendAction(action)`, `start()`, `restart()`, `speechDone(id)`, `leave()`, `disconnect()`. `socketFactory(url)` interface returns object with `onOpen(fn),onMessage(fn),onClose(fn),onError(fn),send(data),close()` matching AIUI wx SocketTask (send accepts a raw string, never a WeChat-style options object); the browser supplies its own adapter. onStatus receives string. Client current `state`, `welcome` readable. Each action automatically sends current state.revision.
 
 Protocol changes should preserve the privacy projection, action revision checks, and cancellation rules across both browser and AIUI clients.

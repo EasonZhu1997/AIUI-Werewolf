@@ -15,7 +15,7 @@ function harness() {
     stop() {}
     abort() { this.aborted++; }
   }
-  const synth = { speak: u => utterances.push(u), cancel() { this.canceled = (this.canceled || 0) + 1; }, getVoices: () => [] };
+  const synth = { speak: u => utterances.push(u), cancel() { this.canceled = (this.canceled || 0) + 1; }, getVoices: () => [{ lang: 'zh-CN', name: 'Test Mandarin' }] };
   const chat = new LobbyChatController({ synth, Utterance, Recognition,
     setTimer: fn => { const id = ++timerId; timers.set(id, fn); return id; }, clearTimer: id => timers.delete(id),
     onDraft: draft => drafts.push(draft), onVoiceStatus: status => statuses.push(status),

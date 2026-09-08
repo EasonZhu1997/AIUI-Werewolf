@@ -11,7 +11,7 @@ let stage, reader;
 try {
   const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
   const config = (await import(pathToFileURL(path.join(root, 'lib/config.js')).href)).default;
-  if (app.version !== '0.1.2' || config.version !== app.version) throw new Error('应用与配置版本不一致');
+  if (app.version !== '0.1.3' || config.version !== app.version) throw new Error('应用与配置版本不一致');
   const url = new URL(config.url);
   const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname);
   if (url.pathname !== '/werewolf/ws' || url.username || url.password || url.hash || url.search ||

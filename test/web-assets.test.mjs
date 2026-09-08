@@ -33,5 +33,14 @@ test('web entry and module imports stay under the deployment prefix', async (t) 
     }
     const config = await (await fetch(new URL('../lib/config.js', moduleUrl))).text();
     assert.match(config, /url: ''/);
+    const speechUrl = new URL('./speech.js', moduleUrl);
+    const speechSource = await (await fetch(speechUrl)).text();
+    for (const [, ref] of speechSource.matchAll(/^import .* from ['"]([^'"]+)['"]/gm)) {
+      const url = new URL(ref, speechUrl);
+      assert.ok(url.pathname.startsWith(prefix));
+      const response = await fetch(url);
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type'), /javascript/);
+    }
   }
 });

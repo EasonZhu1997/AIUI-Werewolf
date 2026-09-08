@@ -14,7 +14,7 @@ try {
   const service = createService({ root, provider, admin: config.admin || null, previewOrigins: (process.env.WEREWOLF_PREVIEW_ORIGINS || '').split(',').filter(Boolean) });
   const host = process.env.HOST || config.host || '127.0.0.1';
   const address = await service.listen(Number(process.env.PORT || config.port || 8790), host);
-  console.log(`月下同桌 v0.1.2 · DeepSeek 已配置\n浏览器打开：http://${host}:${address.port}/werewolf/\n眼镜使用为此服务配置的 AIX。`);
+  console.log(`月下同桌 v0.1.3 · DeepSeek 已配置\n浏览器打开：http://${host}:${address.port}/werewolf/\n眼镜使用为此服务配置的 AIX。`);
   if (config.admin) console.log('管理后台已启用：/werewolf/admin/（需要管理口令）');
   const stop = async () => { await service.close(); process.exit(0); };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
