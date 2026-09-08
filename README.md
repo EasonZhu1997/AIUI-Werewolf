@@ -1,0 +1,94 @@
+# AIUI Werewolf · AIUI 狼人杀
+
+一个支持浏览器和 AIUI 眼镜的六人语音狼人杀。**一个人就能开局，AI 补齐其余五席，也可以邀请朋友一起玩。**
+
+- 创建四位号码房间、加入朋友的房间，或进入公共大厅。
+- 支持 1–6 位真人，任意在线真人都能开局；AI 参与行动、发言和投票。
+- 等人时可以和 AI 伙伴聊天；开局后按夜晚、发言、投票、结算推进。
+- 网页提供阶段提示和动画，眼镜提供按键操作与摆头输入房号。
+- 可选的只读管理后台展示房间、在线状态、AI 调用和运行事件。
+
+当前版本：**0.1.2**。欢迎用它做聚会游戏、眼镜交互实验，或继续开发自己的 AI 角色玩法。
+
+## 快速开始
+
+需要 Node.js 20 或更新版本，推荐 22+，以及自己的 DeepSeek API Key。
+
+```sh
+git clone https://github.com/EasonZhu1997/AIUI-Werewolf.git
+cd AIUI-Werewolf
+npm ci
+cp .env.example .env
+```
+
+编辑 `.env`，填入自己的 `DEEPSEEK_API_KEY`，然后启动：
+
+```sh
+DEEPSEEK_ENV_FILE=.env npm start
+```
+
+打开 [本机游戏页面](http://localhost:8790/werewolf/)，填写称呼并创建房间，点击开局即可。等待区也可以先和 AI 聊两句。终端按 `Ctrl+C` 停止服务。
+
+密钥只由服务端读取，仓库不包含可用凭证。模型调用使用你自己的账户额度；可通过 `DEEPSEEK_MODEL` 修改模型，当前默认值为 `deepseek-v4-flash`。
+
+## 和朋友同桌
+
+所有设备需要连接**同一台游戏服务器**。跨网络使用时，按[部署说明](docs/DEPLOY.md)配置 HTTPS / WSS，朋友再打开你的网页地址、输入同一个房号。`localhost` 只代表当前设备，不能作为朋友或眼镜的服务器地址。
+
+四位房号仅用于分桌，无密码；公共大厅与数字房间 `0000` 分开。开局后只允许原座位重连，新玩家需等下一局。一台电脑模拟两位玩家时，请使用不同浏览器或独立浏览器配置文件，同一配置文件内的标签页会恢复同一个座位。
+
+身份固定为 2 名狼人、1 名预言家、1 名女巫和 2 名村民。服务端管理身份、合法行动与胜负，每个 AI 只接收自身可见的信息。
+
+## 语音与眼镜
+
+语音流程是 **识别 → 核对并确认文字 → 各端朗读**。真人和 AI 的公开发言都通过文字同步，再由设备合成语音；本项目不转发真人原声。麦克风仅在主动操作后开启，网页也支持直接输入文字。
+
+眼镜目标运行时为 AIUI `>=0.17.0, <0.18.0`。先配置你自己的服务器地址，再构建：
+
+```sh
+node tools/configure.mjs wss://your-domain.example/werewolf/ws
+npm run build
+npm run export:agent
+```
+
+AIX 和校验报告输出到 `dist/`，Studio 工程输出到 `agent/`。在 Studio 选择 `agent` 文件夹本身；这些命令只负责本地构建和导出。页面预览见[预览说明](docs/PREVIEW.md)。
+
+语音能力取决于浏览器或 AIUI 宿主及其权限。**眼镜的真实麦克风、实际出声和摆头操作仍待真机验收**，构建或模拟测试通过不代表硬件兼容性已确认。
+
+## 管理后台
+
+在尚未创建私有配置的工程中运行：
+
+```sh
+cp deploy/config.example.json private-config.json
+node tools/configure-admin.mjs http://127.0.0.1:8790
+DEEPSEEK_ENV_FILE=.env npm start
+```
+
+如服务已运行，先停止并重新启动。打开 [本机管理后台](http://127.0.0.1:8790/werewolf/admin/)，使用新生成的 `private-admin-access.txt` 中的口令登录。已有 `private-config.json` 时保留原文件，直接运行配置工具。
+
+后台只读，每 5 秒刷新，不显示隐藏身份、私密线索或聊天正文。公网配置和统计口径见[后台说明](docs/ADMIN.md)。
+
+## 开发与部署
+
+```sh
+npm test
+```
+
+自动测试不调用真实模型。[测试说明](docs/TESTING.md)包含真实模型联调和跨设备手测步骤。
+
+| 文档 | 内容 |
+| --- | --- |
+| [部署](docs/DEPLOY.md) | Linux、systemd、Nginx 与公网接入 |
+| [协议](docs/CONTRACT.md) | 房间、私密视图、语音确认和客户端接口 |
+| [预览](docs/PREVIEW.md) | 本机网页与眼镜页面联调 |
+| [测试](docs/TESTING.md) | 自动化测试、真实模型与设备验证 |
+| [后台](docs/ADMIN.md) | 管理口令、监控和会话 |
+
+服务使用单进程内存保存牌局，重启会清空房间；全员离线时暂停，约 30 分钟后清理。默认支持 12 个数字房间和 1 个公共大厅，最多 72 条连接；AI 每进程每小时最多 600 次请求。确认发送的游戏文字会作为相关 AI 的上下文提交给 DeepSeek。
+
+## 参与
+
+欢迎试玩、提 Issue 和提交改进，见[贡献指南](CONTRIBUTING.md)。反馈时请附上版本、设备、当时阶段和复现步骤，去掉密钥、座位恢复凭证和私人发言。
+
+采用 [MIT 协议](LICENSE)，欢迎使用、修改和商用。第三方依赖见[许可说明](THIRD_PARTY_NOTICES.md)。

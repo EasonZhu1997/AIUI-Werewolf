@@ -1,0 +1,27 @@
+{
+  "name": "aiui-werewolf",
+  "version": "0.1.2",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "dev": "node server/index.mjs",
+    "start:local": "node tools/local-service.mjs start",
+    "stop:local": "node tools/local-service.mjs stop",
+    "status:local": "node tools/local-service.mjs status",
+    "test": "node --test test/*.test.mjs",
+    "build": "node tools/build.mjs",
+    "export:agent": "node tools/export-agent.mjs",
+    "preview": "node tools/preview.mjs"
+  },
+  "dependencies": {
+    "ws": "8.21.3"
+  },
+  "devDependencies": {
+    "@yodaos-pkg/aix-cli": "0.8.2"
+  },
+  "license": "MIT"
+}

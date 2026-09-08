@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111e22">
+  <meta name="description" content="月下同桌，多端狼人杀。一个人也能开局，AI 席位陪你推理与发言。">
+  <title>月下同桌 · AI 狼人杀</title>
+  <link rel="stylesheet" href="./web/style.css">
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+  <div class="app-shell">
+    <header class="app-header">
+      <a class="brand" href="./" aria-label="月下同桌首页"><span class="moon-mark" aria-hidden="true"></span><span>月下同桌<small>WEREWOLF, TOGETHER</small></span></a>
+      <div class="header-right"><span class="connection" id="connection"><i></i><span id="connectionText">尚未入座</span></span><button id="soundButton" class="quiet-button" type="button" aria-pressed="true">声音已开启</button></div>
+    </header>
+
+    <main>
+      <section id="joinView" class="join-view" aria-labelledby="welcomeTitle">
+        <div class="welcome-copy">
+          <div class="eyebrow"><span></span>一张桌子，六种心思</div>
+          <h1 id="welcomeTitle">天黑了，<br>来聊一局。</h1>
+          <p class="lead">一个人也能开局。AI 伙伴会入座、推理，<br class="desktop-break">也会开口陪你把故事继续下去。</p>
+          <div class="welcome-meta"><span>1—6 位真人</span><span>AI 自动补位</span><span>电脑 · 手机 · 眼镜</span></div>
+          <section class="room-directory" aria-labelledby="directoryTitle">
+            <div class="directory-heading"><div><span class="card-kicker">看看谁还在等同桌</span><h2 id="directoryTitle">等待大厅</h2></div><button id="refreshRoomsButton" class="quiet-button" type="button">刷新房间</button></div>
+            <p id="directoryStatus" class="field-hint" role="status">正在连接等待大厅…</p>
+            <div id="roomDirectoryList" class="room-directory-list"></div>
+          </section>
+        </div>
+        <div class="join-card">
+          <span class="card-kicker">今晚，你坐哪一桌？</span>
+          <h2>创建一桌，或加入朋友</h2>
+          <p class="muted">创建后会得到四位房号，发给朋友就能同桌。</p>
+          <form id="joinForm">
+            <label for="nameInput">你的称呼</label>
+            <input id="nameInput" name="name" autocomplete="nickname" maxlength="16" required placeholder="例如：晚风" value="旅人">
+            <button id="createRoomButton" class="primary-button create-room-button" type="button">创建一个新房间 <span aria-hidden="true">↗</span></button>
+            <div class="or"><span>已有房号</span></div>
+            <label for="roomInput">四位房间号 <span>无需密码</span></label>
+            <input id="roomInput" class="room-input" name="room" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" required placeholder="0 0 3 7" aria-describedby="roomHint">
+            <p id="roomHint" class="field-hint">输入朋友创建的房号，加入已有的房间。</p>
+            <button id="joinButton" class="secondary-button" type="submit">加入已有房间 <span aria-hidden="true">↗</span></button>
+            <div class="or"><span>也可以</span></div>
+            <button id="lobbyButton" class="secondary-button" type="button">去公共大厅试一局 <span aria-hidden="true">→</span></button>
+          </form>
+          <p class="join-footnote">任何在线玩家都可以开局，空位由 AI 补齐。<br>每个房间最多六人；房间号用于分桌，请勿当作隐私密码。</p>
+          <div class="sound-check"><button id="soundTestButton" class="quiet-button" type="button">试听中文声音</button><p id="soundTestStatus" role="status" aria-live="polite">先试听一句，确认设备可以朗读。</p></div>
+        </div>
+      </section>
+
+      <section id="gameView" class="game-view" hidden aria-labelledby="tableTitle">
+        <div class="table-heading"><div><div class="eyebrow" id="roundLabel">准备入座</div><h1 id="tableTitle">房间 <span id="roomLabel">0037</span><span id="roomBadge" class="room-badge">六人桌</span></h1></div><div class="table-actions"><button id="copyRoomButton" class="quiet-button" type="button">复制邀请</button><button id="reconnectButton" class="quiet-button" type="button" hidden>重新连接</button><button id="leaveButton" class="quiet-button danger-hover" type="button">离开房间</button></div></div>
+        <section id="phaseGuide" class="phase-guide" aria-labelledby="phaseTitle" hidden data-stage="lobby" data-mode="waiting" data-urgency="normal">
+          <div class="phase-main">
+            <div class="phase-visual" aria-hidden="true">
+              <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g class="phase-art art-lobby"><ellipse cx="80" cy="68" rx="52" ry="28"/><ellipse cx="80" cy="68" rx="43" ry="20"/><rect x="49" y="28" width="18" height="23" rx="4"/><rect x="94" y="28" width="18" height="23" rx="4"/><rect x="49" y="85" width="18" height="23" rx="4"/><rect x="94" y="85" width="18" height="23" rx="4"/><circle class="lobby-spark" cx="81" cy="64" r="3"/></g>
+                <g class="phase-art art-night"><circle class="night-halo" cx="78" cy="55" r="39"/><path class="night-moon" d="M91 20C76 20 64 33 64 48C64 64 77 77 93 77C99 77 104 75 108 72C102 88 83 97 67 89C46 79 40 54 52 36C61 22 76 17 91 20Z"/><path class="night-cloud" d="M18 100H62M101 96H143"/><g class="night-stars"><path d="M125 22V32M120 27H130M29 53V61M25 57H33"/><circle cx="116" cy="54" r="1.4"/><circle cx="44" cy="18" r="1.4"/><circle cx="131" cy="78" r="1.4"/></g></g>
+                <g class="phase-art art-speech"><g class="dawn-sun"><circle cx="80" cy="62" r="25"/><path d="M80 21V12M80 104V112M39 62H30M122 62H131M51 33L45 27M109 91L115 97M51 91L45 97M109 33L115 27"/></g><path class="dawn-horizon" d="M24 83H136M42 95H117M62 105H99"/></g>
+                <g class="phase-art art-vote"><path class="vote-paper" d="M68 19L98 28L85 68L55 59Z"/><path class="vote-check" d="M67 42L72 50L88 37"/><path class="vote-box" d="M45 64L60 53H101L116 64V102H45V64ZM45 64H116M70 58H90"/><path d="M62 80H100M72 89H90"/><circle class="vote-orbit" cx="26" cy="34" r="2"/><circle class="vote-orbit" cx="135" cy="52" r="2"/></g>
+                <g class="phase-art art-result"><g class="result-laurels"><path d="M57 96C31 76 34 48 49 34M103 96C129 76 126 48 111 34M42 49L31 41M40 63L27 58M44 79L31 78M118 49L129 41M120 63L133 58M116 79L129 78"/></g><path class="result-star" d="M80 28L88 47L109 49L93 63L98 84L80 73L62 84L67 63L51 49L72 47Z"/><g class="result-spark"><path d="M27 19V27M23 23H31M130 22V30M126 26H134M79 100V109M75 105H84"/></g></g>
+              </svg>
+            </div>
+            <div class="phase-copy"><p id="phaseEyebrow" class="phase-eyebrow">今夜的序章</p><h2 id="phaseTitle">同桌已就位，故事待开场</h2><p id="phaseHint">等朋友入座，或现在开始。</p></div>
+            <div class="phase-clock"><span id="phaseClockLabel"></span><strong id="phaseClockValue" aria-live="off"></strong></div>
+          </div>
+          <ol id="phaseSteps" class="phase-steps" aria-label="牌局阶段"></ol>
+          <div class="phase-task" role="status" aria-live="polite"><span class="phase-task-dot" aria-hidden="true"></span><strong id="phaseTaskStatus">每位在线玩家都可以开局</strong><span id="phaseTaskHint"></span><button id="phaseActionJump" class="phase-action-jump" type="button" hidden>去操作 ↓</button></div>
+        </section>
+        <div id="phaseTransition" class="phase-transition" role="status" aria-live="polite" hidden><span class="transition-mark" aria-hidden="true"></span><span id="phaseTransitionText"></span></div>
+        <div class="game-grid">
+          <div class="table-column">
+            <section class="table-panel" aria-label="牌桌">
+              <div class="phase-row"><span id="phaseLabel" class="phase-pill">等候开局</span><span class="deadline" id="deadline" aria-live="off"></span></div>
+              <div id="seats" class="seats"></div>
+              <div class="table-message"><div id="tableMessage">朋友陆续入座，故事即将开始。</div><p id="aiStatus" class="muted"></p></div>
+            </section>
+            <section id="lobbyChatPanel" class="lobby-chat-panel" hidden aria-labelledby="lobbyChatTitle">
+              <div class="lobby-chat-heading"><div class="lobby-companion-mark" aria-hidden="true">月</div><div><h2 id="lobbyChatTitle">等朋友，也和小月聊聊</h2><p>AI 等候伙伴 · 不占六人席位</p></div><button id="lobbyStartButton" class="primary-button compact" type="button">开始牌局</button></div>
+              <div id="lobbyMessages" class="lobby-messages" aria-label="等待区共享聊天"></div>
+              <div class="lobby-agent-state"><span id="lobbyChatStatus" role="status" aria-live="polite">小月已就位，可以和它打个招呼。</span><button id="lobbyRetryButton" class="quiet-button" type="button" hidden>重试上一条</button></div>
+              <label for="lobbyChatInput">和小月说句话 <span>全房间可见 · 核对后发送</span></label>
+              <textarea id="lobbyChatInput" maxlength="240" rows="2" placeholder="问问狼人杀怎么玩，或和小月聊聊今天的心情…"></textarea>
+              <div class="composer-bottom"><button id="lobbyRecordButton" class="secondary-button compact" type="button">语音输入</button><span id="lobbyCharCount" class="muted">0 / 240</span><button id="lobbySendButton" class="primary-button compact" type="button">确认并发送</button></div>
+              <p id="lobbyRecognitionStatus" class="field-hint">主动点击语音输入才开麦；确认后小月会回应并朗读。</p>
+              <p id="lobbyVoiceStatus" class="lobby-voice-status" role="status" aria-live="polite"></p>
+            </section>
+            <section id="speechPanel" class="speech-panel" aria-label="当前发言" hidden><div class="speech-heading"><span class="speaking-bars" aria-hidden="true"><i></i><i></i><i></i></span><span id="speakerName"></span><span class="speech-label">公开发言</span></div><p id="speechText"></p></section>
+            <section id="actionPanel" tabindex="-1" class="action-panel" aria-labelledby="actionTitle"><div class="panel-top"><h2 id="actionTitle">等候开局</h2><span id="actionTag" class="small-tag"></span></div><p id="actionDescription" class="muted"></p><div id="choiceList" class="choice-list"></div><div id="speechComposer" class="speech-composer" hidden><label for="speechInput">你的发言 <span>语音转文字，核对后发送</span></label><textarea id="speechInput" maxlength="240" rows="3" placeholder="说说你的观察，也可以直接输入文字……"></textarea><div class="composer-bottom"><button id="recordButton" class="secondary-button compact" type="button">语音输入</button><span id="characterCount" class="muted">0 / 240</span><button id="sendSpeechButton" class="primary-button compact" type="button">确认并发言</button></div><p id="recognitionStatus" class="field-hint">麦克风仅在你点击「语音输入」后开启。</p></div><div id="hostActions" class="host-actions"><button id="startButton" class="primary-button" type="button" hidden>开始牌局 · AI 补齐空位 <span aria-hidden="true">→</span></button><button id="restartButton" class="primary-button" type="button" hidden>再来一局 <span aria-hidden="true">→</span></button></div></section>
+          </div>
+          <aside class="side-column">
+            <section class="role-panel" aria-labelledby="roleTitle"><div class="panel-top"><span class="card-kicker">只属于你的线索</span><span class="private-label">私密</span></div><div class="role-symbol" id="roleSymbol" aria-hidden="true">?</div><h2 id="roleTitle">身份尚未揭晓</h2><p id="roleDescription" class="muted">天黑后，你会拿到自己的身份牌。</p><ul id="clueList" class="clue-list"></ul></section>
+            <section id="resultPanel" class="result-panel" hidden><div class="card-kicker">今夜的答案</div><h2 id="resultTitle"></h2><p id="resultReason"></p></section>
+            <section class="log-panel" aria-labelledby="logTitle"><div class="panel-top"><h2 id="logTitle">牌局记录</h2><span class="small-tag">公开信息</span></div><ol id="logList" class="log-list"><li class="empty-log">故事还没有开始。</li></ol></section>
+          </aside>
+        </div>
+      </section>
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    </main>
+    <footer><span>月下同桌 <span class="footer-dot">·</span> 初版 0.1.2</span><span id="voiceStatus" role="status" aria-live="polite">AI 发言会朗读，也会完整显示为文字。</span></footer>
+  </div>
+  <script type="module" src="./web/main.js"></script>
+</body>
+</html>

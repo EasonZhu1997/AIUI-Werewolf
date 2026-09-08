@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="color-scheme" content="dark">
+  <title>月下同桌 · 运行管理</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./main.js"></script>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+  <div class="shell">
+    <header class="header">
+      <a class="brand" href="../" aria-label="返回月下同桌游戏"><span class="moon" aria-hidden="true"></span><span>月下同桌<small>MOON TABLE · OPERATIONS</small></span></a>
+      <div class="header-actions"><span class="access-tag">运行管理</span><button id="logout" class="quiet" hidden>退出管理</button></div>
+    </header>
+    <main>
+      <section id="loginView" class="login-layout" aria-labelledby="loginTitle">
+        <div class="login-intro"><p class="eyebrow">每一桌，都在月光下。</p><h1 id="loginTitle">看见此刻的<br>每一场相遇。</h1><p class="lead">房间、玩家与 AI 的运行状态，<br>在这里一起掌握。</p><div class="orbit" aria-hidden="true"><span></span><i></i><b>月下同桌</b></div><p class="privacy-note">独立管理入口 · 不展示隐藏身份与聊天内容</p></div>
+        <form id="loginForm" class="login-card">
+          <p class="eyebrow">ADMIN ACCESS</p><h2>进入管理后台</h2><p class="muted">使用管理口令查看当前服务状态。</p>
+          <label for="token">管理口令</label><input id="token" name="token" type="password" autocomplete="current-password" required maxlength="512" placeholder="请输入管理口令">
+          <button id="loginButton" class="primary" type="submit">进入后台 <span aria-hidden="true">↗</span></button>
+          <p id="loginStatus" class="form-status" role="status">正在确认登录状态…</p>
+          <p class="small-note">口令仅用于登录。共享电脑使用结束后，请退出管理。</p>
+        </form>
+      </section>
+      <section id="dashboard" class="dashboard" hidden aria-labelledby="dashboardTitle">
+        <div class="page-heading"><div><p class="eyebrow">LIVE OVERVIEW</p><h1 id="dashboardTitle">此刻，牌桌上的动静。</h1><p class="muted" id="serviceMeta">正在读取服务状态</p></div><div class="refresh-area"><button id="refresh" class="secondary">刷新状态 <span aria-hidden="true">↻</span></button><p id="refreshStatus" role="status">每 5 秒自动刷新</p></div></div>
+        <div id="connectionNotice" class="notice" role="status" hidden></div>
+        <div id="summary" class="summary-grid" aria-label="运行概览"></div>
+        <div class="content-grid">
+          <section class="panel rooms-panel" aria-labelledby="roomsTitle"><div class="panel-heading"><div><p class="eyebrow">ROOM MONITOR</p><h2 id="roomsTitle">房间巡览</h2></div><span id="roomCount" class="subtle-count"></span></div>
+            <div class="filters"><div class="search-field"><label class="sr-only" for="roomSearch">搜索房间号</label><span aria-hidden="true">⌕</span><input id="roomSearch" type="search" placeholder="搜索房间号 / 公共大厅" maxlength="40" autocomplete="off"></div><label class="sr-only" for="phaseFilter">筛选房间状态</label><select id="phaseFilter"><option value="all">所有阶段</option><option value="lobby">等待中</option><option value="active">游戏中</option><option value="paused">已暂停</option><option value="result">已结算</option></select></div>
+            <div id="roomList" class="room-list" aria-live="off"></div>
+            <div id="roomDetail" class="room-detail" hidden></div>
+          </section>
+          <aside class="right-column"><section class="panel ai-panel" aria-labelledby="aiTitle"><div class="panel-heading"><div><p class="eyebrow">AI COMPANION</p><h2 id="aiTitle">AI 运行状态</h2></div><span class="ai-mark" aria-hidden="true">月</span></div><div id="aiState"></div></section>
+            <section class="panel events-panel" aria-labelledby="eventsTitle"><div class="panel-heading"><div><p class="eyebrow">RECENT ACTIVITY</p><h2 id="eventsTitle">最近动态</h2></div><span class="subtle-count">本次运行</span></div><ol id="eventList" class="event-list"></ol></section>
+          </aside>
+        </div>
+        <p class="dashboard-note">只读状态面板 · 统计与动态在服务重启后重新累计 · 页面隐藏时暂停刷新</p>
+      </section>
+    </main>
+    <footer><span>月下同桌 · 一个人也能开局</span><span>管理后台 <span id="adminVersion">0.1.0</span><span class="footer-dot">·</span><a href="../">回到游戏 ↗</a></span></footer>
+  </div>
+</body>
+</html>

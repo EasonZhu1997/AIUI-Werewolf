@@ -1,0 +1,13 @@
+{
+  "host": "203.0.113.10",
+  "codeDirectory": "/opt/aiui-werewolf",
+  "service": "werewolf.service",
+  "port": 8790,
+  "config": "/etc/aiui-werewolf/config.json",
+  "nginxSnippet": "/etc/nginx/snippets/werewolf-location.conf",
+  "nginxVhost": "/etc/nginx/sites-available/werewolf",
+  "providerSource": "/etc/werewolf-provider.env",
+  "webUrl": "https://your-domain.example/werewolf/",
+  "socketUrl": "wss://your-domain.example/werewolf/ws",
+  "existingEndpointsToVerify": ["https://your-domain.example/health"]
+}
