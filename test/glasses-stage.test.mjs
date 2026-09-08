@@ -20,6 +20,30 @@ test('own prompt gets actionable countdown while dead players remain spectators'
   assert.equal(glassesStage(view({ players: [{ id: 'me', alive: false }] })).stageBadge, '旁观');
 });
 
+test('solo peaceful first night explains waiting without marking a living player eliminated', () => {
+  const firstNight = view({ round: 1, rules: { peacefulFirstNight: true } });
+  const stage = glassesStage(firstNight);
+  assert.equal(stage.stageName, '单人练习 · 首夜平安');
+  assert.equal(stage.stageHint, '首夜只进行预言家查验，天亮后所有人进入发言。');
+  assert.equal(stage.stageMode, 'waiting');
+  assert.equal(stage.ownTurn, false);
+  assert.equal(glassesCountdown(firstNight).timeLabel, '等待夜晚结束');
+});
+
+test('peaceful first night retains the seer action and does not override offline or death state', () => {
+  const firstNight = view({ round: 1, rules: { peacefulFirstNight: true }, prompt: { kind: 'night' } });
+  assert.equal(glassesStage(firstNight).stageBadge, '轮到你');
+  assert.equal(glassesStage(firstNight).stageHint, '首夜只进行预言家查验，天亮后所有人进入发言。');
+  assert.equal(glassesStage(firstNight, { connected: false }).stageMode, 'offline');
+  assert.equal(glassesStage({ ...firstNight, players: [{ id: 'me', alive: false }] }).stageMode, 'spectating');
+});
+
+test('peaceful first-night copy requires the rule and expires at dawn or the second night', () => {
+  for (const v of [view({ round: 1 }), view({ round: 1, rules: { peacefulFirstNight: false } }), view({ rules: { peacefulFirstNight: true } }), view({ phase: 'speech', round: 1, rules: { peacefulFirstNight: true } })]) {
+    assert.doesNotMatch(JSON.stringify(glassesStage(v)), /首夜平安|首夜只进行/);
+  }
+});
+
 test('public playback labels speech content without claiming audible output', () => {
   const playback = view({ phase: 'playback', speech: { seat: 3 } });
   assert.match(glassesStage(playback, { muted: true }).stageHint, /本机已静音/);

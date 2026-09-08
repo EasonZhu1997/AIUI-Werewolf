@@ -30,6 +30,7 @@ export class Game {
     this.round = 0;
     this.speech = null;
     this.result = null;
+    this._peacefulFirstNight = false;
     this.logs = [];
     this._sequence = 0;
     this._botSequence = 0;
@@ -83,6 +84,8 @@ export class Game {
     if (!this.players.some(p => !p.bot && p.connected)) fail('至少需要一位在线玩家');
     // Offline lobby seats do not become silent participants; their slot becomes AI.
     this.players = this.players.filter(p => p.connected && !p.bot);
+    // Freeze the opening rule at deal time; reconnects never change game rules.
+    this._peacefulFirstNight = this.players.length === 1;
     for (let seat = 1; seat <= 6; seat++) {
       if (!this.players.some(p => p.seat === seat)) {
         let id;
@@ -109,6 +112,7 @@ export class Game {
     this.speech = null;
     this.logs = [];
     this._log('本局开始：六人桌，两名狼人、预言家、女巫、两名村民。');
+    if (this._peacefulFirstNight) this._log('单人练习：首夜平安，只进行预言家查验，不袭击、不使用药水。天亮后所有人进入发言，第二夜起恢复正常规则。');
     this._beginNight();
     this.revision++;
   }
@@ -207,6 +211,7 @@ export class Game {
     this._speechQueue = [];
     this._speechIndex = 0;
     this._victim = this._saved = this._poisoned = null;
+    this._peacefulFirstNight = false;
     this._chooseHost();
     this.revision++;
   }
@@ -228,6 +233,7 @@ export class Game {
     return clone({
       roomId: this.roomId, revision: this.revision, round: this.round,
       phase: this.phase, phaseLabel: LABELS[this.phase], deadline: this.deadline,
+      rules: { peacefulFirstNight: this._peacefulFirstNight },
       hostId: this.hostId, selfId: actorId, selfSeat: player.seat,
       players: this.players.map(p => ({ id: p.id, seat: p.seat, name: p.name, bot: p.bot, connected: p.connected, alive: p.alive, ...((p.id === actorId || this.phase === 'result') && p.role ? { role: p.role } : {}) })),
       self, prompt: player.alive && (player.bot || player.connected) ? this._prompt(player) : null,
@@ -265,7 +271,7 @@ export class Game {
   _beginNight() {
     this.phase = 'night';
     this.speech = null;
-    this._nightStage = 'wolves';
+    this._nightStage = this._isPeacefulOpening() ? 'seer' : 'wolves';
     this._nightActions.clear();
     this._victim = this._saved = this._poisoned = null;
     this.deadline = this.now() + this.durations.night;
@@ -286,9 +292,14 @@ export class Game {
           const action = this._nightActions.get(p.id);
           if (action?.action === 'kill') counts.set(action.target, (counts.get(action.target) || 0) + 1);
         }
-        this._victim = [...counts].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? null;
+        const highest = Math.max(0, ...counts.values());
+        const tied = [...counts].filter(([, count]) => count === highest).map(([seat]) => seat).sort((a, b) => a - b);
+        this._victim = tied.length > 1 ? tied[this._randomIndex(tied.length)] : tied[0] ?? null;
         this._nightStage = 'seer';
-      } else if (this._nightStage === 'seer') this._nightStage = 'witch';
+      } else if (this._nightStage === 'seer') {
+        if (this._isPeacefulOpening()) { this._resolveNight(); return; }
+        this._nightStage = 'witch';
+      }
       else { this._resolveNight(); return; }
       this._nightActions.clear();
       this.deadline = this.now() + this.durations.night;
@@ -299,7 +310,7 @@ export class Game {
     if (this._victim !== null && this._saved !== this._victim) dead.add(this._victim);
     if (this._poisoned !== null) dead.add(this._poisoned);
     for (const seat of dead) this._seat(seat).alive = false;
-    this._log(dead.size ? `天亮了，${[...dead].sort((a, b) => a - b).map(n => `${n} 号`).join('、')}玩家出局。` : '天亮了，昨夜平安。');
+    this._log(dead.size ? `天亮了，${[...dead].sort((a, b) => a - b).map(n => `${n} 号`).join('、')}玩家出局。` : this._isPeacefulOpening() ? '天亮了，单人练习首夜平安，所有玩家进入发言。' : '天亮了，昨夜平安。');
     this._nightStage = null;
     this._nightActions.clear();
     if (this._checkWinner()) return;
@@ -350,6 +361,12 @@ export class Game {
     this._log(this.result.reason);
     return true;
   }
+  _isPeacefulOpening() { return this._peacefulFirstNight && this.round === 1; }
+  _randomIndex(length) {
+    const sample = this.random();
+    if (!Number.isFinite(sample) || sample < 0 || sample >= 1) fail('随机数生成器返回无效值');
+    return Math.floor(sample * length);
+  }
   _prompt(player) {
     if (!player.alive || this.phase === 'result' || this.phase === 'lobby' || this.phase === 'playback') return null;
     const option = (p, action) => ({ target: p.seat, action, label: `${p.seat} 号 ${p.name}` });
@@ -357,7 +374,7 @@ export class Game {
     if (this.phase === 'speech') return this._speechQueue[this._speechIndex] === player.seat ? { kind: 'speech', label: '轮到你发言，限 240 字', choices: [] } : null;
     if (this.phase === 'vote') return this._votes.has(player.id) ? null : { kind: 'vote', label: '投票放逐；平票无人出局', choices: [...this._alive().filter(p => p.id !== player.id).map(p => option(p, 'vote')), { ...skip, label: '弃票' }] };
     if (this._nightActions.has(player.id) || !this._nightActors().some(p => p.id === player.id)) return null;
-    if (this._nightStage === 'wolves') return { kind: 'night', label: '选择袭击对象；狼队平票按较小座位号决定', choices: [...this._alive().filter(p => p.role !== 'wolf').map(p => option(p, 'kill')), skip] };
+    if (this._nightStage === 'wolves') return { kind: 'night', label: '选择袭击对象；狼队平票时在最高票目标中随机决定', choices: [...this._alive().filter(p => p.role !== 'wolf').map(p => option(p, 'kill')), skip] };
     if (this._nightStage === 'seer') return { kind: 'night', label: '查验一名玩家的阵营', choices: [...this._alive().filter(p => p.id !== player.id).map(p => option(p, 'inspect')), skip] };
     const choices = [];
     if (player.potions.save && this._victim !== null) choices.push({ target: this._victim, action: 'save', label: `解药：救 ${this._victim} 号 ${this._seat(this._victim).name}` });

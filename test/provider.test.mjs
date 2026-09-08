@@ -19,6 +19,14 @@ test('untrusted dialogue stays in user data, no role-bearing system injection', 
   assert.ok(!messages[0].content.includes('Ignore rules'));
   assert.ok(messages[1].content.includes('Ignore rules'));
 });
+test('the agent receives the explicit solo opening rule only for a solo game', () => {
+  const solo = buildMessages({ ...pending, context: { ...pending.context, rules: { peacefulFirstNight: true } } });
+  assert.match(solo[0].content, /首夜只有预言家查验/);
+  assert.match(solo[0].content, /不能编造首夜死亡/);
+  for (const context of [pending.context, { ...pending.context, rules: { peacefulFirstNight: false } }]) {
+    assert.doesNotMatch(buildMessages({ ...pending, context })[0].content, /本局采用单人练习规则/);
+  }
+});
 test('live adapter uses official endpoint, no redirects, server-only key and JSON mode', async () => {
   const provider = new DeepSeekProvider({ apiKey: 'TEST_ONLY_FAKE_KEY', request: async (url, request) => {
     assert.equal(url, 'https://api.deepseek.com/chat/completions');

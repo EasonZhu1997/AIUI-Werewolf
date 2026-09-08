@@ -18,7 +18,12 @@ const COPY = {
 export function derivePhasePresentation(view, { connected = true, pending = false, submitted = false, now = Date.now() } = {}) {
   if (!view) return null;
   const stage = view.phase === 'playback' ? 'speech' : STAGES.some((item) => item.id === view.phase) ? view.phase : 'lobby';
-  const copy = COPY[stage];
+  const peacefulFirstNight = view.rules?.peacefulFirstNight && view.round === 1 && stage === 'night';
+  const copy = peacefulFirstNight ? {
+    ...COPY[stage], title: '单人练习 · 首夜平安',
+    hint: '首夜只进行预言家查验，天亮后所有人进入发言。',
+    transition: '单人练习 · 首夜平安',
+  } : COPY[stage];
   const player = (view.players || []).find((item) => item.id === view.selfId);
   const observing = !['lobby', 'result'].includes(stage) && player?.alive === false;
   const ownPrompt = connected && !observing && Boolean(view.prompt);

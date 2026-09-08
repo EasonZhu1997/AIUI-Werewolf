@@ -17,6 +17,29 @@ test('only the recipient prompt lights up their private turn and deadline', () =
   assert.equal(value.seconds, 79);
   assert.match(value.instruction, /只有你/);
 });
+test('solo peaceful first night explains waiting without marking a living player eliminated', () => {
+  const model = derivePhasePresentation(view('night', { rules: { peacefulFirstNight: true } }));
+  assert.equal(model.title, '单人练习 · 首夜平安');
+  assert.equal(model.transition, '单人练习 · 首夜平安');
+  assert.equal(model.hint, '首夜只进行预言家查验，天亮后所有人进入发言。');
+  assert.equal(model.instruction, model.hint);
+  assert.equal(model.mode, 'waiting');
+  assert.equal(model.observing, false);
+  assert.equal(model.myTurn, false);
+  assert.equal(model.seconds, null);
+});
+test('peaceful first night retains the seer action and does not override offline or death state', () => {
+  const firstNight = view('night', { rules: { peacefulFirstNight: true }, prompt: { kind: 'night' } });
+  assert.equal(derivePhasePresentation(firstNight).mode, 'turn');
+  assert.equal(derivePhasePresentation(firstNight).title, '单人练习 · 首夜平安');
+  assert.equal(derivePhasePresentation(firstNight, { connected: false }).mode, 'offline');
+  assert.equal(derivePhasePresentation({ ...firstNight, players: [{ id: 'me', alive: false }] }).mode, 'observer');
+});
+test('peaceful first-night copy requires the rule and expires at dawn or the second night', () => {
+  for (const v of [view('night'), view('night', { rules: { peacefulFirstNight: false } }), view('night', { round: 2, rules: { peacefulFirstNight: true } }), view('speech', { rules: { peacefulFirstNight: true } })]) {
+    assert.doesNotMatch(JSON.stringify(derivePhasePresentation(v)), /首夜平安|首夜只进行/);
+  }
+});
 test('speech and playback use one major daytime stage and progress step', () => {
   const a = derivePhasePresentation(view('speech'));
   const b = derivePhasePresentation(view('playback', { speech: { seat: 2, name: '同桌', text: '游戏发言' } }));

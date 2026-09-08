@@ -81,7 +81,7 @@ class InstallerTest(unittest.TestCase):
         return True
 
     def installer(self, runner=None, health=None):
-        return deploy.Installer(self.plan, self.files, "0.1.3", runner=runner or FakeRunner(), health=health or self.health,
+        return deploy.Installer(self.plan, self.files, "0.1.4", runner=runner or FakeRunner(), health=health or self.health,
                                 filesystem_root=self.fs, account=(os.getuid(), os.getgid()), sleep=lambda _: None, port_check=lambda: None)
 
     def snapshot(self):
@@ -90,7 +90,7 @@ class InstallerTest(unittest.TestCase):
     def test_reviewed_archive_and_plan_are_required(self):
         files, version = deploy.load_archive(self.archive, self.plan["archiveSha256"])
         self.assertEqual(set(files), deploy.RUNTIME_FILES)
-        self.assertEqual(version, "0.1.3")
+        self.assertEqual(version, "0.1.4")
         with self.assertRaisesRegex(deploy.DeployError, "SHA-256"):
             deploy.load_archive(self.archive, "0" * 64)
         for key, value in [("service", "coach.service"), ("codeDirectory", "/opt/intercom"), ("expectedVhostSha256", "")]:

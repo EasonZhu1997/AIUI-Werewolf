@@ -36,7 +36,7 @@ test('one human can start a full six-seat table with the exact role composition'
   assert.deepEqual(g.players.map(p => p.role), ['wolf', 'wolf', 'seer', 'witch', 'villager', 'villager']);
   assert.equal(g.phase, 'night');
   assert.equal(g.round, 1);
-  assert.equal(g.pendingAI().playerId, id(g, 2));
+  assert.equal(g.pendingAI().playerId, id(g, 3), 'solo first night starts with the seer');
 });
 
 test('room validation, seat limit, names, and online human authority', () => {
@@ -114,8 +114,9 @@ test('night ballots cannot target wolf teammates, dead seats, or invalid action 
   assert.throws(() => night(g, 1, 'kill', 6), /回合/);
 });
 
-test('wolf tie is deterministic; seer learns only faction, and the witch privately sees the threatened victim', () => {
+test('wolf tie uses the injected draw; seer learns only faction, and the witch privately sees the threatened victim', () => {
   const { game: g } = table(); g.start('h1');
+  g.random = () => 0;
   night(g, 1, 'kill', 6); night(g, 2, 'kill', 5);
   assert.equal(g.view('h3').prompt.kind, 'night');
   night(g, 3, 'inspect', 4);
@@ -326,7 +327,7 @@ test('only actual mutations advance revision and shuffling is deterministic when
 });
 
 test('timeouts never invent bot speech, kills, investigations or votes', () => {
-  const { game: g, advance } = table({ humans: 1 }); g.start('h1');
+  const { game: g, advance } = table({ humans: 2 }); g.start('h1');
   assert.equal(advance(99), false);
   assert.equal(advance(1), true); // wolves skip
   assert.equal(g.phase, 'night');
@@ -361,7 +362,7 @@ test('offline players cannot stall phases and late submissions cannot cross a de
   assert.equal(g.view('h1').prompt.kind, 'night');
   let now = 0;
   const late = new Game({ roomId: '0000', now: () => now, random: () => 0.999, durations: { night: 10 } });
-  late.join({ id: 'human', name: '玩家' }); late.start('human');
+  late.join({ id: 'human', name: '玩家' }); late.join({ id: 'other', name: '同桌' }); late.start('human');
   now = 10;
   assert.throws(() => late.act('human', { kind: 'night', action: 'kill', target: 5 }), /超时/);
   assert.equal(late.view('human').prompt, null);
@@ -379,7 +380,9 @@ test('playback deadline advances even when clients never acknowledge speech', ()
 });
 
 test('pendingAI is exactly a private view projection and never contains raw game secrets', () => {
-  const { game: g } = table({ humans: 1 }); g.start('h1');
+  const { game: g } = table();
+  for (const seat of [2, 3, 4, 5]) g.leave(`h${seat}`);
+  g.start('h1');
   const wolf = g.pendingAI();
   assert.deepEqual(wolf.context, g.view(wolf.playerId));
   assert.deepEqual(wolf.context.players.filter(p => p.role).map(p => p.seat), [2]);

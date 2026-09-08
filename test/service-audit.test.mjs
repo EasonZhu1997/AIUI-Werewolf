@@ -35,6 +35,18 @@ async function connect(url, join) {
   return c;
 }
 const allSkip = pending => pending.kind === 'speech' ? { kind: 'speech', text: `${pending.context.selfSeat}号发言：我会根据大家的发言继续判断。` } : { kind: pending.kind, action: 'skip', target: null };
+async function standardTableWithBotWolf(url, roomId) {
+  // Two real sockets remain at seats 1 and 6, so this is a standard opening
+  // with the human and AI wolves acting concurrently at seats 1 and 2.
+  const peers = [];
+  for (let seat = 1; seat <= 6; seat++) {
+    const peer = await connect(url, { roomId, name: `同桌${seat}` });
+    await peer.wait(m => m.type === 'state'); peers.push(peer);
+  }
+  for (const peer of peers.slice(1, 5)) peer.send({ type: 'leave' });
+  await eventually(() => peers[0].state?.players.length === 2);
+  return peers[0];
+}
 function deferredProvider() {
   const calls = [];
   return { calls, decide(pending, { signal } = {}) {
@@ -60,7 +72,7 @@ test('night broadcasts never disclose which hidden role bot is thinking', async 
 test('human private action during AI request preserves the existing bot call and result', async t => {
   const provider = deferredProvider();
   const { service, url } = await setup(t, { provider });
-  const human = await connect(url, { roomId: '1301', name: '玩家' });
+  const human = await standardTableWithBotWolf(url, '1301');
   await human.wait(m => m.type === 'state'); human.send({ type: 'start' });
   await eventually(() => provider.calls.length === 1);
   await eventually(() => human.state?.phase === 'night');
@@ -103,7 +115,7 @@ test('phase expiry aborts an obsolete model request before it can act or retry',
   let now = 1000;
   const provider = deferredProvider();
   const { service, url } = await setup(t, { provider, now: () => now, durations: { night: 10000 } });
-  const human = await connect(url, { roomId: '1310', name: '玩家' });
+  const human = await standardTableWithBotWolf(url, '1310');
   await human.wait(m => m.type === 'state'); human.send({ type: 'start' });
   await eventually(() => provider.calls.length === 1);
   now = service.rooms.get('1310').game.deadline;
@@ -196,8 +208,12 @@ test('single human and deterministic test bots complete a full game over real We
   assert.equal(final.state.result.winner, 'wolves');
   assert.equal(final.state.players.length, 6);
   assert.equal(final.state.players.filter(p => p.bot).length, 5);
-  assert.equal(heard.size, 5);
-  assert.equal(calls.filter(p => p.kind === 'speech').length, 4);
+  const firstDay = human.inbox.find(m => m.type === 'state' && m.state.round === 1 && m.state.phase === 'speech').state;
+  assert.equal(firstDay.rules.peacefulFirstNight, true);
+  assert.equal(firstDay.players.every(p => p.alive), true);
+  assert.equal(firstDay.prompt.kind, 'speech', 'the human gets a first-day speaking turn');
+  assert.equal(heard.size, 6);
+  assert.equal(calls.filter(p => p.kind === 'speech').length, 5);
   assert.ok(final.state.logs.some(l => l.text.includes('1号发言')));
   for (const pending of calls) assert.deepEqual(pending.context.players.filter(p => p.role).map(p => p.id), [pending.playerId]);
   human.send({ type: 'restart' });

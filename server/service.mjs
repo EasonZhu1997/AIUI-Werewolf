@@ -31,7 +31,7 @@ export function createService({ root, provider, admin: adminConfig = null, now =
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); res.end(); return; }
     if (pathname === '/werewolf/health' || pathname === '/health') {
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ app: 'aiui-werewolf', ok: true, version: '0.1.3', aiConfigured: Boolean(provider), maxPlayers: 6 })); return;
+      res.end(JSON.stringify({ app: 'aiui-werewolf', ok: true, version: '0.1.4', aiConfigured: Boolean(provider), maxPlayers: 6 })); return;
     }
     if (pathname.startsWith('/werewolf/')) pathname = pathname.slice('/werewolf'.length);
     if (pathname === '/') pathname = '/web/index.html';
@@ -40,7 +40,7 @@ export function createService({ root, provider, admin: adminConfig = null, now =
     if (!/^\/(?:web|lib|assets)\/[\w./-]+$/.test(pathname) || pathname.split('/').includes('..')) { res.writeHead(404); res.end('Not found'); return; }
     if (pathname === '/lib/config.js') {
       res.setHeader('Content-Type', MIME['.js']);
-      res.end("export default { version: '0.1.3', url: '' };\n"); return;
+      res.end("export default { version: '0.1.4', url: '' };\n"); return;
     }
     const filename = path.resolve(root, '.' + pathname);
     if (!filename.startsWith(path.resolve(root) + path.sep) || !MIME[path.extname(filename)]) { res.writeHead(404); res.end(); return; }
