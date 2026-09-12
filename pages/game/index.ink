@@ -45,7 +45,7 @@ export default {
   onLoad() {
     this.alive = true; this.foreground = true; this.view = null; this.roomId = null;
     this.editor = null; this.commands = []; this.commandIndex = 0;
-    this.choiceIndex = 0; this.pageIndex = 0; this.panel = 'main'; this.transcript = '';
+    this.choiceIndex = 0; this.pageIndex = 0; this.panel = 'main'; this.transcript = ''; this.storyCapture = false; this.storyTranscript = ''; this.storySentText = '';
     this.promptKey = ''; this.roomEpoch = 0; this.gameEpoch = 0; this.ignoredResumeRoom = null; this.handledResumeError = null; this.resumeInMemory = {};
     this.online = false; this.lastStageTransition = null; this.motionGeneration = 0;
     this.rooms = []; this.roomSelection = 0; this.creating = false;
@@ -68,7 +68,11 @@ export default {
       createRecognition: () => typeof SpeechRecognition === 'function' ? new SpeechRecognition() : null, timers,
       onStatus: (notice) => { if (this.alive) this.setData({ notice: short(notice, 34) }); },
       onTranscript: (text) => {
-        if (!this.alive || !this.foreground || !this.view || !this.view.prompt || this.view.prompt.kind !== 'speech') return;
+        if (!this.alive || !this.foreground || !this.view) return;
+        if (this.storyCapture && this.view.phase !== 'lobby' && this.view.phase !== 'result') {
+          this.storyTranscript = text; this.pageIndex = 0; this.panel = 'story'; this.renderGame(); return;
+        }
+        if (!this.view.prompt || this.view.prompt.kind !== 'speech') return;
         this.transcript = text; this.pageIndex = 0; this.panel = 'main'; this.renderGame();
       },
       onListening: (listening) => {
@@ -248,7 +252,7 @@ export default {
     this.pose.stop(); if (this.editor) this.editor.clear(); this.editor = null;
     this.audio.suspend(); this.audio.completed.clear(); this.client.disconnect(); this.view = null;
     this.online = false; this.stopClock(); this.stopStageMotion(); this.lastStageTransition = null;
-    this.roomId = id; ++this.roomEpoch; this.transcript = ''; this.panel = 'main'; this.promptKey = '';
+    this.roomId = id; ++this.roomEpoch; this.transcript = ''; this.storyCapture = false; this.storyTranscript = ''; this.storySentText = ''; this.lastStoryId = ''; this.panel = 'main'; this.promptKey = '';
     this.setData({ screen: 'game', title: roomLabel(id), cells: [], roleLine: '身份将在开局后私下显示',
       seats: [], phaseLabel: '等待连接', contentTitle: '正在入座', contentText: '其他设备输入相同房间号即可同桌',
       actionLabel: '重连房间', canAct: true, timeLabel: '', choiceLabel: '', hasChoices: false, showPaging: false });
@@ -289,9 +293,13 @@ export default {
     const key = view.round + ':' + view.phase + ':' + (prompt ? prompt.kind + ':' + JSON.stringify(prompt.choices || []) : '');
     const changed = key !== this.promptKey;
     this.view = view;
+    if (view.storyChat && view.storyChat.status !== 'thinking' && this.storySentText) {
+      if (view.storyChat.status === 'idle') this.storyTranscript = '';
+      this.storySentText = '';
+    }
     if (view.phase === 'lobby') this.receiveLobbyChat(view.lobbyChat);
     if (changed) {
-      this.promptKey = key; this.transcript = ''; this.choiceIndex = 0; this.pageIndex = 0;
+      this.promptKey = key; this.transcript = ''; this.storyCapture = false; this.storyTranscript = ''; this.choiceIndex = 0; this.pageIndex = 0;
       this.commandIndex = 0; this.panel = 'main'; this.audio.abortListening();
     }
     if (!view.speech || view.speech.id !== (this.lastSpeechId || '')) this.pageIndex = 0;
@@ -300,7 +308,7 @@ export default {
     if (view.speech) this.audio.speak(view.speech);
     else {
       if (this.audio.play && this.audio.play.kind === 'player') this.audio.stopPlayback('phase-ended');
-      this.narratePhase(view);
+      this.narratePhase(view); this.narrateStory(view);
     }
   },
   narratePhase(view) {
@@ -310,6 +318,13 @@ export default {
     if (view.phase === 'vote') cue = '现在开始放逐投票。请选择你怀疑的玩家，也可以弃票。';
     if (view.phase === 'result') cue = '本局结束。' + (view.result && view.result.reason || '请查看对局结果。');
     if (cue) this.audio.narrate({ id: 'host:' + this.roomEpoch + ':' + (this.gameEpoch || 0) + ':' + view.round + ':' + view.phase, text: cue });
+  },
+  narrateStory(view) {
+    const messages = view.story && Array.isArray(view.story.messages) ? view.story.messages : [];
+    const latest = messages[messages.length - 1];
+    if (!latest || latest.kind !== 'host' || latest.id === this.lastStoryId) return;
+    this.lastStoryId = latest.id;
+    this.audio.narrate({ id: 'story:' + this.roomEpoch + ':' + latest.id, text: latest.text });
   },
   stopLobbyChat() {
     this.lobbyEpoch = (this.lobbyEpoch || 0) + 1; this.lobbyTranscript = ''; this.lobbySentText = ''; this.lobbyQueue = [];
@@ -400,6 +415,12 @@ export default {
       const messages = chat.messages || [];
       title = this.lobbySentText ? '聊天已提交 · 等待确认' : this.lobbyTranscript ? chat.status === 'thinking' ? '小月回复中 · 草稿已保留' : '核对聊天草稿 · 确认才发送' : this.data.chatListening ? '正在听你说话' : chat.status === 'thinking' ? '小月正在回复 · 仍可开局' : chat.status === 'error' ? '小月暂时未能回复' : '小月 · 最新消息在前';
       body = this.lobbyTranscript || (chat.status === 'error' ? chat.error || '请稍后重试，也可以直接开局。' : messages.length ? messages.slice(-6).reverse().map(message => message.name + '：' + message.text).join('；') : '小月会陪大家聊聊。选择“和小月说话”后开麦，先核对文字，再确认发送。小月不占游戏座位。');
+    } else if (this.panel === 'story' && view.phase !== 'lobby') {
+      const story = view.story || { messages: [] };
+      const messages = Array.isArray(story.messages) ? story.messages : [];
+      const chat = view.storyChat || { status: 'idle' };
+      title = this.storyTranscript ? '核对给城主的话' : chat.status === 'thinking' ? '城主正在续写' : '地下城城主';
+      body = this.storyTranscript || (messages.length ? messages.slice(-7).reverse().map(message => (message.kind === 'host' ? '城主' : message.name) + '：' + message.text).join('；') : '城主正在点亮第一盏灯。选择“与城主对话”，说出你看见的线索、疑问或下一步想法。');
     } else if (this.panel === 'clues') {
       title = '仅自己可见 · 身份线索';
       body = (view.self ? '你的身份：' + view.self.roleName + '。' : '') + ((view.self && view.self.clues || []).join('；') || '目前没有额外线索。');
@@ -429,8 +450,14 @@ export default {
     this.pageTotal = pages.length;
     const oldCommand = !reset && this.commands[this.commandIndex] && this.commands[this.commandIndex].id;
     const commands = [];
-    if (this.panel !== 'main') commands.push({ id: 'main', label: '返回当前回合' });
-    else if (view.canStart) commands.push({ id: 'start', label: '开局 · AI 补位' });
+    if (this.panel !== 'main') {
+      commands.push({ id: 'main', label: '返回当前回合' });
+      if (this.panel === 'story' && view.phase !== 'lobby' && view.phase !== 'result') {
+        const storyChat = view.storyChat || { status: 'idle' };
+        if (this.storyTranscript && !this.data.listening && !this.storySentText && storyChat.status !== 'thinking') commands.unshift({ id: 'story-send', label: '确认发给城主' });
+        commands.push({ id: this.data.listening ? 'story-stop' : 'story-mic', label: this.data.listening ? '停止城主识别' : this.storyTranscript ? '重新说给城主听' : '和城主说话' });
+      }
+    } else if (view.canStart) commands.push({ id: 'start', label: '开局 · AI 补位' });
     else if (view.canRestart) commands.push({ id: 'restart', label: '再来一局' });
     else if (prompt && prompt.kind === 'speech') {
       commands.push({ id: this.data.listening ? 'stop-mic' : 'mic', label: this.data.listening ? '停止识别' : this.transcript ? '重新说话' : '开始说话' });
@@ -443,6 +470,8 @@ export default {
         commands.push({ id: this.data.chatListening ? 'chat-stop' : 'chat-mic', label: this.data.chatListening ? '停止聊天识别' : this.lobbyTranscript ? '重新说给小月听' : '和小月说话' });
         if (view.canStart) commands.push({ id: 'start', label: '现在开局 · AI 补位' });
       } else commands.push({ id: 'chat', label: '和小月聊聊' });
+    } else if (view.phase !== 'result') {
+      commands.push({ id: 'story', label: '与城主对话' });
     }
     if (pages.length > 1) commands.push({ id: 'next-page', label: '下一页文字' });
     commands.push({ id: 'clues', label: '查看身份线索' }, { id: 'players', label: '同桌座位' }, { id: 'history', label: '公开记录' },
@@ -494,6 +523,12 @@ export default {
       } else if (id === 'pass') {
         this.audio.abortListening(); this.client.sendAction({ kind: 'speech', text: '本轮过麦。' });
       } else if (id === 'mute') { const muted = !this.data.muted; this.setData({ muted }); this.audio.setMuted(muted); if (this.lobbyAudio) this.lobbyAudio.setMuted(muted); this.renderGame(); }
+      else if (id === 'story-mic' && view && view.phase !== 'lobby' && view.phase !== 'result') {
+        this.storyTranscript = ''; this.storySentText = ''; this.storyCapture = true; this.pageIndex = 0; this.panel = 'story'; this.audio.startListening(); this.renderGame();
+      } else if (id === 'story-stop') this.audio.stopListening();
+      else if (id === 'story-send' && view && view.phase !== 'lobby' && view.phase !== 'result' && this.storyTranscript && !this.data.listening && !this.storySentText) {
+        this.client.storyChat(this.storyTranscript); this.storySentText = this.storyTranscript; this.setData({ notice: '已提交给城主，正在等他回应' }); this.renderGame();
+      }
       else if (id === 'create') this.createRoom();
       else if (id === 'chat-mic' && view && view.phase === 'lobby' && !this.startRequested) {
         this.lobbyTranscript = ''; this.lobbyQueue = []; this.captureLobbyEpoch = this.lobbyEpoch; this.captureLobbyRoom = this.roomId;
@@ -505,7 +540,7 @@ export default {
       else if (id === 'reconnect') { this.stopLobbyChat(); this.audio.suspend(); this.client.disconnect(); this.connectRoom(); }
       else if (id === 'leave') this.leaveRoom();
       else if (id === 'next-page') { this.pageIndex = (this.pageIndex + 1) % this.pageTotal; this.renderGame(); }
-      else if (['main', 'clues', 'players', 'history', 'chat'].includes(id)) { this.panel = id; this.pageIndex = 0; this.commandIndex = 0; this.renderGame(true); }
+      else if (['main', 'clues', 'players', 'history', 'chat', 'story'].includes(id)) { this.panel = id; this.pageIndex = 0; this.commandIndex = 0; this.renderGame(true); }
     } catch (_) { if (id === 'start') this.startRequested = false; this.setData({ notice: '操作未成功，请等待最新状态或重连' }); }
   },
   onKeyUp(event) {

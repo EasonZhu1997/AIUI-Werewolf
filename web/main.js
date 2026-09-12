@@ -5,7 +5,7 @@ import { PhaseUI } from './phase-ui.js';
 import { LobbyChatController, roomDirectoryEntries } from './lobby.js';
 
 const $ = (id) => document.getElementById(id);
-const dom = Object.fromEntries(['joinView', 'gameView', 'joinForm', 'nameInput', 'roomInput', 'joinButton', 'lobbyButton', 'connection', 'connectionText', 'soundButton', 'roomLabel', 'roomBadge', 'roundLabel', 'copyRoomButton', 'reconnectButton', 'leaveButton', 'phaseLabel', 'deadline', 'seats', 'tableMessage', 'aiStatus', 'speechPanel', 'speakerName', 'speechText', 'actionTitle', 'actionTag', 'actionDescription', 'choiceList', 'speechComposer', 'speechInput', 'recordButton', 'characterCount', 'sendSpeechButton', 'recognitionStatus', 'startButton', 'restartButton', 'roleSymbol', 'roleTitle', 'roleDescription', 'clueList', 'resultPanel', 'resultTitle', 'resultReason', 'logList', 'notice', 'voiceStatus'].map((id) => [id, $(id)]));
+const dom = Object.fromEntries(['joinView', 'gameView', 'joinForm', 'nameInput', 'roomInput', 'joinButton', 'lobbyButton', 'connection', 'connectionText', 'soundButton', 'roomLabel', 'roomBadge', 'roundLabel', 'copyRoomButton', 'reconnectButton', 'leaveButton', 'phaseLabel', 'deadline', 'seats', 'tableMessage', 'aiStatus', 'speechPanel', 'speakerName', 'speechText', 'storyPanel', 'storyMode', 'storyMessages', 'storyInput', 'storyCharCount', 'storySendButton', 'storyStatus', 'actionTitle', 'actionTag', 'actionDescription', 'choiceList', 'speechComposer', 'speechInput', 'recordButton', 'characterCount', 'sendSpeechButton', 'recognitionStatus', 'startButton', 'restartButton', 'roleSymbol', 'roleTitle', 'roleDescription', 'clueList', 'resultPanel', 'resultTitle', 'resultReason', 'logList', 'notice', 'voiceStatus'].map((id) => [id, $(id)]));
 const lobbyDom = Object.fromEntries(['createRoomButton', 'refreshRoomsButton', 'directoryStatus', 'roomDirectoryList', 'lobbyChatPanel', 'lobbyStartButton', 'lobbyMessages', 'lobbyChatStatus', 'lobbyRetryButton', 'lobbyChatInput', 'lobbyRecordButton', 'lobbyCharCount', 'lobbySendButton', 'lobbyRecognitionStatus', 'lobbyVoiceStatus'].map(id => [id, $(id)]));
 const store = {
   read(key) { try { return JSON.parse(localStorage.getItem(`werewolf:${key}`)); } catch { return null; } },
@@ -42,6 +42,8 @@ let directoryClient = null;
 let directoryGeneration = 0;
 let directoryRooms = [];
 let lastChatSignature = '';
+let storySending = false;
+let storyLastSent = '';
 const phaseUI = new PhaseUI({ root: document });
 
 function element(tag, className, text) {
@@ -147,6 +149,8 @@ function showJoin() {
   state = null;
   previousPrompt = '';
   pending = false;
+  storySending = false;
+  storyLastSent = '';
   joining = false;
   connected = false;
   dom.gameView.hidden = true;
@@ -176,6 +180,8 @@ function joinRoom(roomId, { create = false } = {}) {
   connected = false;
   joining = true;
   pending = false;
+  storySending = false;
+  storyLastSent = '';
   phaseUI.reset();
   lastSeenError = null;
   dom.joinButton.disabled = true;
@@ -210,6 +216,11 @@ function joinRoom(roomId, { create = false } = {}) {
       state = view;
       connected = true;
       pending = false;
+      if (view.storyChat && view.storyChat.status !== 'thinking') {
+        if (view.storyChat.status === 'idle' && storyLastSent && view.story?.messages?.some(message => message.kind === 'human' && message.text === storyLastSent)) dom.storyInput.value = '';
+        storyLastSent = '';
+        storySending = false;
+      }
       joining = false;
       dom.joinView.hidden = true;
       dom.gameView.hidden = false;
@@ -303,7 +314,7 @@ function renderActions() {
   const self = state.players.find((player) => player.id === state.selfId);
   dom.actionTitle.textContent = prompt?.label || phase[0];
   dom.actionTag.textContent = prompt ? '轮到你了' : self && !self.alive && state.phase !== 'lobby' ? '旁观中' : state.canStart ? '随时开局' : '';
-  dom.actionDescription.textContent = !connected ? '连接已断开，重新连接后可继续这局游戏。' : self && !self.alive && !['lobby', 'result'].includes(state.phase) ? '你已出局，可以继续听大家发言，等待身份揭晓。' : prompt?.kind === 'night' ? '这是你的私密行动。选择后立即提交，请看准目标。' : prompt?.kind === 'speech' ? '可以说出你的判断、回应质疑。最多 240 字，发送后会朗读给同桌玩家。' : phase[1];
+  dom.actionDescription.textContent = !connected ? '连接已断开，重新连接后可继续这局游戏。' : self && !self.alive && !['lobby', 'result'].includes(state.phase) ? '你已出局，可以继续听大家发言，等待身份揭晓。也可以继续和城主对话。' : prompt?.kind === 'night' ? '这是你的私密行动。先和城主聊聊你注意到的风吹草动，再决定要不要提交夜间行动。' : prompt?.kind === 'speech' ? '可以说出你的判断、回应质疑。城主会接住你的话，把这一轮写进故事。' : phase[1];
   const promptKey = prompt?.kind === 'speech' ? `${state.round}:${state.selfSeat}:speech` : '';
   if (previousPrompt !== promptKey) {
     voice.cancel();
@@ -343,6 +354,29 @@ function updateComposer() {
   dom.recordButton.disabled = !connected || pending || !voice.supported;
 }
 
+function renderStory() {
+  const active = Boolean(state) && state.phase !== 'lobby';
+  dom.storyPanel.hidden = !active;
+  if (!active) return;
+  const messages = state.story?.messages || [];
+  dom.storyMessages.replaceChildren(...(messages.length ? messages.slice(-24).map(message => {
+    const item = element('article', `story-message ${message.kind || 'host'}`);
+    const label = message.kind === 'host' ? '地下城城主' : `${message.name || '玩家'}${message.kind === 'agent' ? ' · AI' : ''}`;
+    item.append(element('span', 'story-message-name', label), element('p', '', message.text));
+    return item;
+  }) : [element('p', 'muted', '城主正在点亮故事的第一盏灯。')]));
+  dom.storyMessages.scrollTop = dom.storyMessages.scrollHeight;
+  const chat = state.storyChat || { status: 'idle', error: '' };
+  const unavailable = state.phase === 'result' || !connected;
+  dom.storyMode.textContent = chat.status === 'thinking' ? '城主正在回应…' : state.phase === 'result' ? '故事已落幕' : unavailable ? '等待连接' : '正在听';
+  dom.storyStatus.textContent = !connected ? '连接已断开，重新连接后才能继续对话。' : chat.status === 'thinking' || storySending ? '城主正在把你的话写进故事…' : chat.status === 'error' ? (chat.error || '城主暂时沉默了，可以重试。') : state.phase === 'result' ? '可以回看这段故事，重新开局后再进入新的冒险。' : '你可以问线索、说感受，或告诉城主你想观察什么。';
+  dom.storyStatus.classList.toggle('chat-error', chat.status === 'error');
+  dom.storyPanel.classList.toggle('story-thinking', chat.status === 'thinking');
+  dom.storyCharCount.textContent = `${dom.storyInput.value.length} / 240`;
+  dom.storyInput.disabled = unavailable || storySending || chat.status === 'thinking';
+  dom.storySendButton.disabled = unavailable || storySending || chat.status === 'thinking' || !dom.storyInput.value.trim();
+}
+
 function render() {
   dom.roomLabel.textContent = state.roomId === 'lobby' ? '公共大厅' : state.roomId;
   dom.roomBadge.textContent = `${state.players.length} / 6 人`;
@@ -352,6 +386,7 @@ function render() {
   dom.aiStatus.textContent = state.aiStatus || '';
   renderSeats();
   renderRole();
+  renderStory();
   lobbyChat.sync(state, { connected, hidden: document.hidden });
   renderActions();
   dom.speechPanel.hidden = !state.speech;
@@ -488,6 +523,15 @@ lobbyDom.lobbySendButton.addEventListener('click', () => { if (state?.phase === 
 lobbyDom.lobbyRetryButton.addEventListener('click', () => { if (state?.phase === 'lobby') lobbyChat.retry(text => client.chat(text)); });
 dom.restartButton.addEventListener('click', () => { if (pending) return; pending = true; if (!safeSend(() => client.restart())) pending = false; renderActions(); });
 dom.speechInput.addEventListener('input', updateComposer);
+dom.storyInput.addEventListener('input', () => renderStory());
+dom.storySendButton.addEventListener('click', () => {
+  const text = dom.storyInput.value.trim();
+  if (!connected || !text || storySending || state?.phase === 'lobby' || state?.phase === 'result') return;
+  storySending = true;
+  storyLastSent = text;
+  try { client.storyChat(text); } catch (error) { storySending = false; storyLastSent = ''; notify(error.message || '城主对话未发送', true); }
+  renderStory();
+});
 dom.recordButton.addEventListener('click', () => {
   if (!connected || state?.prompt?.kind !== 'speech' || pending) return;
   if (voice.active) voice.stop(); else { playback.cancel(''); voice.start(); }

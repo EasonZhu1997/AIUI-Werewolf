@@ -42,6 +42,27 @@ test('six human seats, seventh rejected, room isolation and private role views',
   }
   assert.equal(other.state.phase, 'lobby'); assert.equal(other.state.players.length, 1);
 });
+
+test('started rooms accept a public城主 dialogue and keep the reply in the story stream', async t => {
+  const seen = [];
+  const provider = {
+    decide: () => new Promise(() => {}),
+    storyChat: async (history, context) => { seen.push({ history, context }); return { text: '城主把烛火拨亮了一寸：先说说你真正想确认的事。' }; },
+  };
+  const { url } = await setup(t, provider);
+  const player = await client(url, { roomId: '1357', name: '旅人' });
+  await player.wait(m => m.type === 'state');
+  player.send({ type: 'start' });
+  await player.wait(m => m.type === 'state' && m.state.phase === 'night');
+  player.send({ type: 'story_chat', text: '我想看看东墙附近。' });
+  await player.wait(m => m.type === 'state' && m.state.storyChat?.status === 'thinking');
+  const reply = await player.wait(m => m.type === 'state' && m.state.storyChat?.status === 'idle' && m.state.story.messages.some(message => message.kind === 'host' && message.text.includes('烛火')));
+  assert.equal(reply.state.story.messages.at(-2).text, '我想看看东墙附近。');
+  assert.equal(reply.state.story.messages.at(-1).name, '地下城城主');
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].context.players.some(player => 'role' in player || 'clues' in player), false);
+  assert.doesNotMatch(JSON.stringify(seen[0]), /DEEPSEEK|狼队友/);
+});
 test('resume requires secret token and replaces old socket without disconnecting resumed seat', async t => {
   const { url } = await setup(t);
   const a = await client(url, { roomId: '1234', name: 'one' });

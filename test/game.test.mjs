@@ -39,6 +39,21 @@ test('one human can start a full six-seat table with the exact role composition'
   assert.equal(g.pendingAI().playerId, id(g, 3), 'solo first night starts with the seer');
 });
 
+test('a started table exposes a public story stream and keeps城主 chat separate from private clues', () => {
+  const { game: g } = table({ humans: 1 });
+  g.start('h1');
+  const opening = g.view('h1');
+  assert.ok(opening.story.messages.some(message => message.kind === 'host' && message.name === '地下城城主'));
+  g.storyChat('h1', '我想听听城墙外的风声。');
+  const afterHuman = g.view('h1');
+  assert.equal(afterHuman.story.messages.at(-1).text, '我想听听城墙外的风声。');
+  assert.equal(afterHuman.story.messages.at(-1).kind, 'human');
+  assert.equal(JSON.stringify(afterHuman.story).includes('狼队友'), false);
+  assert.equal(g.storyHost('风声从东墙转向了门缝。'), true);
+  assert.equal(g.view('h1').story.messages.at(-1).kind, 'host');
+  assert.throws(() => g.storyChat('h1', '字'.repeat(241)), /240/);
+});
+
 test('room validation, seat limit, names, and online human authority', () => {
   assert.throws(() => new Game({ roomId: '37' }));
   assert.throws(() => new Game({ roomId: '0037', durations: { night: 0 } }));

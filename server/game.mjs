@@ -30,6 +30,7 @@ export class Game {
     this.round = 0;
     this.speech = null;
     this.result = null;
+    this.story = { messages: [] };
     this._peacefulFirstNight = false;
     this.logs = [];
     this._sequence = 0;
@@ -113,6 +114,7 @@ export class Game {
     this.logs = [];
     this._log('本局开始：六人桌，两名狼人、预言家、女巫、两名村民。');
     if (this._peacefulFirstNight) this._log('单人练习：首夜平安，只进行预言家查验，不袭击、不使用药水。天亮后所有人进入发言，第二夜起恢复正常规则。');
+    this._storyPush('host', '地下城城主', '月影从高墙后升起，六把椅子围着一张旧木桌。门已经落锁，只有你们的声音能把这座城继续往前推。');
     this._beginNight();
     this.revision++;
   }
@@ -132,6 +134,7 @@ export class Game {
       if (!text || Array.from(text).length > 240) fail('发言须为一至 240 个字');
       this.speech = { id: `${this.roomId}-${++this._sequence}`, seat: player.seat, name: player.name, text };
       this._log(`${player.seat} 号 ${player.name}：${text}`);
+      this._storyPush(player.bot ? 'agent' : 'human', player.name, text);
       this.phase = 'playback';
       this.deadline = this.now() + this.durations.playback;
     } else {
@@ -212,6 +215,7 @@ export class Game {
     this._speechIndex = 0;
     this._victim = this._saved = this._poisoned = null;
     this._peacefulFirstNight = false;
+    this.story = { messages: [] };
     this._chooseHost();
     this.revision++;
   }
@@ -237,7 +241,7 @@ export class Game {
       hostId: this.hostId, selfId: actorId, selfSeat: player.seat,
       players: this.players.map(p => ({ id: p.id, seat: p.seat, name: p.name, bot: p.bot, connected: p.connected, alive: p.alive, ...((p.id === actorId || this.phase === 'result') && p.role ? { role: p.role } : {}) })),
       self, prompt: player.alive && (player.bot || player.connected) ? this._prompt(player) : null,
-      speech: this.speech, logs: this.logs, result: this.result,
+      speech: this.speech, logs: this.logs, result: this.result, story: this.story,
       canStart: this.phase === 'lobby' && !player.bot && player.connected,
       canRestart: this.phase === 'result' && !player.bot && player.connected,
     });
@@ -254,6 +258,30 @@ export class Game {
 
   _seat(seat) { return this.players.find(p => p.seat === seat); }
   _alive() { return this.players.filter(p => p.alive); }
+  _storyPush(kind, name, text) {
+    const clean = typeof text === 'string' ? text.replace(/[\u0000-\u001f\u007f]/g, ' ').trim() : '';
+    if (!clean) return;
+    this.story.messages.push({ id: 'story-' + (++this._sequence), round: this.round, kind, name: String(name || '地下城城主').slice(0, 24), text: Array.from(clean).slice(0, 320).join('') });
+    this.story.messages = this.story.messages.slice(-100);
+  }
+  storyChat(actorId, rawText) {
+    this._requireHuman(actorId);
+    if (this.phase === 'lobby') fail('进入故事后才能和地下城城主对话');
+    if (this.phase === 'result') fail('本局已经落幕，请重新开局再进入故事');
+    const text = typeof rawText === 'string' ? rawText.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ').trim() : '';
+    if (!text || Array.from(text).length > 240) fail('城主对话须为一至 240 个字');
+    const player = this.players.find(p => p.id === actorId);
+    this._storyPush('human', player.name, text);
+    this.revision++;
+  }
+  storyHost(text) {
+    if (this.phase === 'lobby' || this.phase === 'result') return false;
+    const clean = typeof text === 'string' ? text.trim() : '';
+    if (!clean || Array.from(clean).length > 320) return false;
+    this._storyPush('host', '地下城城主', clean);
+    this.revision++;
+    return true;
+  }
   _log(text) {
     this.logs.push({ id: `event-${++this._sequence}`, round: this.round, text });
     this.logs = this.logs.slice(-200);
@@ -276,6 +304,9 @@ export class Game {
     this._victim = this._saved = this._poisoned = null;
     this.deadline = this.now() + this.durations.night;
     this._log(`第 ${this.round} 夜，天黑请闭眼。`);
+    this._storyPush('host', '地下城城主', this._isPeacefulOpening()
+      ? '第一声钟响得很轻。夜色没有伸手夺走任何人，只把一枚看不见的疑问放在桌心：你愿意先相信谁？'
+      : `第 ${this.round} 夜降临，风从门缝里钻进来，烛火朝着同一个方向偏去。轮到你们决定，今晚谁会被黑暗记住。`);
     this._advanceNight();
   }
   _advanceNight() {
@@ -311,6 +342,9 @@ export class Game {
     if (this._poisoned !== null) dead.add(this._poisoned);
     for (const seat of dead) this._seat(seat).alive = false;
     this._log(dead.size ? `天亮了，${[...dead].sort((a, b) => a - b).map(n => `${n} 号`).join('、')}玩家出局。` : this._isPeacefulOpening() ? '天亮了，单人练习首夜平安，所有玩家进入发言。' : '天亮了，昨夜平安。');
+    this._storyPush('host', '地下城城主', dead.size
+      ? `天快亮时，城墙外传来一声闷响。${[...dead].sort((a, b) => a - b).map(n => `${n}号的椅子空了`).join('，')}，剩下的人只能把没说完的话带进白天。`
+      : '晨雾贴着窗沿散开，六把椅子都还在。可每个人都知道，平安并不等于什么都没有发生。');
     this._nightStage = null;
     this._nightActions.clear();
     if (this._checkWinner()) return;
@@ -325,9 +359,12 @@ export class Game {
       this._votes.clear();
       this.deadline = this.now() + this.durations.vote;
       this._log('发言结束，请投票放逐一名玩家；可弃票，平票无人出局。');
+      this._storyPush('host', '地下城城主', '最后一句话落下，桌面安静了半拍。每个人都握着自己的判断，票纸在烛影里等着被写下。');
     } else {
       this.phase = 'speech';
       this.deadline = this.now() + this.durations.speech;
+      const player = this._seat(this._speechQueue[this._speechIndex]);
+      if (player) this._storyPush('host', '地下城城主', `${player.seat}号，轮到你了。所有人的目光都转过来，先说一句你真正注意到的事。`);
     }
   }
   _resolveVote() {
@@ -344,7 +381,11 @@ export class Game {
       const eliminated = this._seat(ranked[0][0]);
       eliminated.alive = false;
       this._log(`${eliminated.seat} 号 ${eliminated.name}被放逐出局（${ranked[0][1]} 票）。`);
-    } else this._log(ranked.length ? '本轮平票，无人出局。' : '本轮全部弃票，无人出局。');
+      this._storyPush('host', '地下城城主', `票纸被推到桌心，${eliminated.seat}号的名字停在最上面。椅子向后拖开时，屋里没有人敢先松气。`);
+    } else {
+      this._log(ranked.length ? '本轮平票，无人出局。' : '本轮全部弃票，无人出局。');
+      this._storyPush('host', '地下城城主', ranked.length ? '票纸分成两堆，谁也没有赢过沉默。平票，无人离席，但怀疑已经在桌边留下了影子。' : '所有人都把票压在掌心。没有人离席，可这份沉默比一句指认更让人不安。');
+    }
     this._votes.clear();
     if (this._checkWinner()) return;
     this.round++;
@@ -359,6 +400,9 @@ export class Game {
     this.deadline = null;
     this.speech = null;
     this._log(this.result.reason);
+    this._storyPush('host', '地下城城主', wolves === 0
+      ? '最后一层雾散开了。城门上的狼影熄灭，幸存者终于看见彼此真正的脸。'
+      : '钟声在城里回荡，狼影已经压过了火光。故事没有替谁辩护，只记住了你们一路说过的话。');
     return true;
   }
   _isPeacefulOpening() { return this._peacefulFirstNight && this.round === 1; }

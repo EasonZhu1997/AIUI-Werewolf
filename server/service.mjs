@@ -9,7 +9,7 @@ import { ServiceMonitor } from './monitor.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
-export function createService({ root, provider, admin: adminConfig = null, now = Date.now, random, durations, maxRooms = 12, maxConnections = 72, aiRetryDelayMs = 1500, previewOrigins = [], lobbyChatCooldownMs = 2000, lobbyChatTimeoutMs = 25000, joinTimeoutMs = 10000 } = {}) {
+export function createService({ root, provider, admin: adminConfig = null, now = Date.now, random, durations, maxRooms = 12, maxConnections = 72, aiRetryDelayMs = 1500, previewOrigins = [], lobbyChatCooldownMs = 2000, lobbyChatTimeoutMs = 25000, storyChatCooldownMs = 1400, storyChatTimeoutMs = 25000, joinTimeoutMs = 10000 } = {}) {
   const allowedPreviews = new Set(previewOrigins.map(value => {
     const url = new URL(value);
     if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || url.origin !== value) throw new Error('预览来源必须是完整的本机 HTTP Origin');
@@ -83,10 +83,13 @@ export function createService({ root, provider, admin: adminConfig = null, now =
   const chatView = room => room.game.phase === 'lobby' ? {
     messages: room.lobbyChat.messages.map(message => ({ ...message })), status: room.lobbyChat.status, error: room.lobbyChat.error,
   } : null;
+  const storyChatView = room => room.game.phase === 'lobby' ? null : {
+    status: room.storyChat.status, error: room.storyChat.error,
+  };
   const broadcast = room => {
     room.lastActive = now();
     monitor.observe(room);
-    for (const [id, ws] of room.sockets) send(ws, { type: 'state', state: { ...room.game.view(id), aiStatus: room.aiStatus || '', lobbyChat: chatView(room) } });
+    for (const [id, ws] of room.sockets) send(ws, { type: 'state', state: { ...room.game.view(id), aiStatus: room.aiStatus || '', lobbyChat: chatView(room), storyChat: storyChatView(room) } });
     publishDirectory();
   };
   const cancelLobbyChat = (room, clear = false) => {
@@ -96,12 +99,64 @@ export function createService({ root, provider, admin: adminConfig = null, now =
     room.lobbyChat.status = 'idle'; room.lobbyChat.error = '';
     if (clear) { room.lobbyChat.messages = []; room.lastChatAt = undefined; }
   };
+  const cancelStoryChat = (room, clear = false) => {
+    room.storyEpoch++;
+    room.storyController?.abort(); room.storyController = null;
+    if (room.storyTimer) clearTimeout(room.storyTimer); room.storyTimer = null;
+    room.storyChat.status = 'idle'; room.storyChat.error = '';
+    if (clear) room.storyLastAt = undefined;
+  };
   const makeRoom = roomId => {
     // Numeric private tables have a fixed limit; the shared lobby has one reserved slot.
     if (roomId !== 'lobby' && [...rooms.keys()].filter(id => id !== 'lobby').length >= maxRooms) throw new Error('当前房间较多，请稍后再试');
     const room = { game: new Game({ roomId, now, random, durations }), sockets: new Map(), createdAt: now(), lastActive: now(), acks: new Set(),
-      lobbyChat: { messages: [], status: 'idle', error: '' }, chatEpoch: 0 };
+      lobbyChat: { messages: [], status: 'idle', error: '' }, chatEpoch: 0,
+      storyChat: { status: 'idle', error: '' }, storyEpoch: 0 };
     rooms.set(roomId, room); return room;
+  };
+  const beginStoryChat = (room, playerId, rawText) => {
+    if (room.game.phase === 'lobby') throw new Error('进入故事后才能和地下城城主对话');
+    if (room.game.phase === 'result') throw new Error('本局已经落幕，请重新开局再进入故事');
+    const player = room.game.players.find(item => item.id === playerId && item.connected && !item.bot);
+    if (!player) throw new Error('请先入座再和地下城城主对话');
+    if (room.storyChat.status === 'thinking') throw new Error('地下城城主正在回应，请稍候');
+    if (room.storyLastAt !== undefined && now() - room.storyLastAt < storyChatCooldownMs) throw new Error('请让城主把这句话说完');
+    if (typeof provider?.storyChat !== 'function') throw new Error('地下城城主暂时无法回应，请稍后再试');
+    room.game.storyChat(playerId, rawText);
+    room.storyLastAt = now();
+    room.storyChat.status = 'thinking'; room.storyChat.error = '';
+    const epoch = ++room.storyEpoch; const controller = new AbortController(); room.storyController = controller;
+    const view = room.game.view(playerId);
+    const history = view.story?.messages?.map(message => ({ kind: message.kind, name: message.name, text: message.text })) || [];
+    const context = {
+      phase: view.phase, phaseLabel: view.phaseLabel, round: view.round,
+      players: view.players.map(({ seat, name, alive, bot }) => ({ seat, name, alive, bot })),
+      recentLogs: view.logs.slice(-8).map(log => log.text), currentSpeech: view.speech ? { seat: view.speech.seat, name: view.speech.name, text: view.speech.text } : null,
+    };
+    const active = () => !room.closed && room.storyEpoch === epoch && !['lobby', 'result'].includes(room.game.phase) && room.sockets.size > 0;
+    const current = () => active() && !controller.signal.aborted;
+    const finishError = () => { if (active()) { room.storyChat.status = 'error'; room.storyChat.error = '地下城城主暂时沉默了，请稍后再试。'; broadcast(room); } };
+    room.storyTimer = setTimeout(() => {
+      if (!current()) return;
+      controller.abort(); finishError(); room.storyEpoch++; room.storyController = null; room.storyTimer = null;
+    }, storyChatTimeoutMs); room.storyTimer.unref?.();
+    broadcast(room);
+    (async () => {
+      try {
+        const reply = await provider.storyChat(history, context, { signal: controller.signal });
+        if (!current()) return;
+        const text = typeof reply?.text === 'string' ? reply.text.replace(/[\u0000-\u001f\u007f]/g, ' ').trim() : '';
+        if (!text || Array.from(text).length > 320) throw new Error('Invalid story response');
+        room.game.storyHost(text);
+        room.storyChat.status = 'idle'; room.storyChat.error = '';
+        broadcast(room);
+      } catch (_) { if (!controller.signal.aborted) finishError(); }
+      finally {
+        if (room.storyEpoch === epoch) {
+          if (room.storyTimer) clearTimeout(room.storyTimer); room.storyTimer = null; room.storyController = null;
+        }
+      }
+    })();
   };
   const allocateRoomId = () => {
     const start = randomInt(10000);
@@ -217,7 +272,7 @@ export function createService({ root, provider, admin: adminConfig = null, now =
     } else room.game.setConnected(ws.playerId, false);
     ws.room = null;
     if (explicit && room.game.phase === 'lobby' && room.game.players.length === 0) {
-      room.closed = true; room.controller?.abort(); cancelLobbyChat(room, true);
+      room.closed = true; room.controller?.abort(); cancelLobbyChat(room, true); cancelStoryChat(room, true);
       rooms.delete(room.game.roomId); pruneCredentials(room); monitor.removed(room.game.roomId, 'empty'); publishDirectory(); return;
     }
     if (!room.sockets.size) {
@@ -225,6 +280,7 @@ export function createService({ root, provider, admin: adminConfig = null, now =
       room.aiStatus = '';
       room.controller?.abort();
       cancelLobbyChat(room);
+      cancelStoryChat(room);
     }
     updated(room);
   };
@@ -241,7 +297,7 @@ export function createService({ root, provider, admin: adminConfig = null, now =
         if (++ws.count > 100) { ws.close(1008, 'Rate limit'); return; }
         const msg = JSON.parse(raw.toString());
         if (!msg || typeof msg !== 'object' || Array.isArray(msg)) throw new Error('消息格式无效');
-        if (['ping', 'rooms', 'join', 'create', 'leave', 'lobby_chat', 'start', 'restart', 'action', 'speech_done'].includes(msg.type)) requestType = msg.type;
+        if (['ping', 'rooms', 'join', 'create', 'leave', 'lobby_chat', 'story_chat', 'start', 'restart', 'action', 'speech_done'].includes(msg.type)) requestType = msg.type;
         if (msg.type === 'ping') { send(ws, { type: 'pong' }); return; }
         if (msg.type === 'rooms') {
           ws.wantsRooms = true; clearTimeout(joinTimeout);
@@ -290,11 +346,12 @@ export function createService({ root, provider, admin: adminConfig = null, now =
         if (!room || room.sockets.get(ws.playerId) !== ws) throw new Error('请先加入房间');
         if (msg.type === 'leave') { detach(ws, true); ws.close(1000); return; }
         if (msg.type === 'lobby_chat') { beginLobbyChat(room, ws.playerId, msg.text); return; }
+        if (msg.type === 'story_chat') { beginStoryChat(room, ws.playerId, msg.text); return; }
         if (msg.type === 'start') {
           if (!provider) throw new Error('DeepSeek 尚未配置，暂不能开启 AI 陪玩');
           room.game.start(ws.playerId);
-          cancelLobbyChat(room, true);
-        } else if (msg.type === 'restart') { room.game.restart(ws.playerId); cancelLobbyChat(room, true); }
+          cancelLobbyChat(room, true); cancelStoryChat(room, true);
+        } else if (msg.type === 'restart') { room.game.restart(ws.playerId); cancelLobbyChat(room, true); cancelStoryChat(room, true); }
         else if (msg.type === 'action') {
           if (msg.revision !== room.game.revision) throw new Error('房间进度已更新，请按当前提示重新操作');
           room.game.act(ws.playerId, msg.action);
@@ -315,7 +372,7 @@ export function createService({ root, provider, admin: adminConfig = null, now =
     for (const [id, room] of rooms) {
       if (!room.sockets.size) {
         if (now() - room.lastActive > 30 * 60 * 1000) {
-          room.closed = true; room.controller?.abort(); cancelLobbyChat(room, true); rooms.delete(id);
+          room.closed = true; room.controller?.abort(); cancelLobbyChat(room, true); cancelStoryChat(room, true); rooms.delete(id);
           monitor.removed(id, 'expired');
           for (const [token, cred] of credentials) if (cred.roomId === id) credentials.delete(token);
           publishDirectory();
@@ -338,7 +395,7 @@ export function createService({ root, provider, admin: adminConfig = null, now =
     close: async () => {
       clearInterval(timer); clearInterval(heartbeat);
       admin.close();
-      for (const room of rooms.values()) { room.closed = true; room.controller?.abort(); cancelLobbyChat(room, true); }
+      for (const room of rooms.values()) { room.closed = true; room.controller?.abort(); cancelLobbyChat(room, true); cancelStoryChat(room, true); }
       for (const ws of wss.clients) ws.terminate();
       await new Promise(resolve => wss.close(resolve));
       await new Promise(resolve => server.close(resolve));
